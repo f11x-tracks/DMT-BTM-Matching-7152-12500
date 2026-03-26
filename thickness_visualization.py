@@ -522,6 +522,305 @@ def create_statistical_summary(df):
     
     print(f"\n💾 Statistical summary saved to 'statistical_summary.txt'")
 
+def create_worst_coordinate_analysis(df):
+    """Create detailed analysis showing coordinate pairs with biggest deltas"""
+    fig = plt.figure(figsize=(18, 10))
+    
+    # Calculate absolute thickness differences for ranking
+    df['Abs_Thickness_Delta'] = abs(df['DMT_Thickness'] - df['BTM_Thickness'])
+    df['Thickness_Delta'] = df['DMT_Thickness'] - df['BTM_Thickness']
+    df['Distance_from_center'] = np.sqrt(df['BTM_X']**2 + df['BTM_Y']**2)
+    
+    # Create main title
+    fig.suptitle('Coordinate Analysis: Biggest Thickness Deltas (DMT - BTM)\nIdentifying Worst-Performing Measurement Locations', 
+                 fontsize=18, fontweight='bold', y=0.96)
+    
+    # Define grid layout - 2 rows x 3 columns
+    gs = fig.add_gridspec(2, 3, hspace=0.35, wspace=0.3, height_ratios=[1, 1])
+    
+    # 1. MAIN SPATIAL PLOT - All coordinates with delta color coding
+    ax1 = fig.add_subplot(gs[0, :2])
+    
+    # Create scatter plot with color coding for deltas
+    scatter = ax1.scatter(df['BTM_X'], df['BTM_Y'], 
+                         c=df['Thickness_Delta'], 
+                         cmap='RdBu_r',  # Red=positive (DMT>BTM), Blue=negative (DMT<BTM)
+                         s=80, alpha=0.8, edgecolors='black', linewidth=0.5)
+    
+    # Add colorbar
+    cbar = plt.colorbar(scatter, ax=ax1, shrink=0.8)
+    cbar.set_label('Thickness Difference (DMT - BTM) [Å]', rotation=270, labelpad=20, fontsize=11)
+    
+    ax1.set_xlabel('X Position (mm)', fontsize=12)
+    ax1.set_ylabel('Y Position (mm)', fontsize=12)
+    ax1.set_title('All Coordinate Pairs: Thickness Delta Spatial Distribution\n(Red: DMT > BTM, Blue: DMT < BTM)', 
+                  fontweight='bold', fontsize=12)
+    ax1.grid(True, alpha=0.3)
+    ax1.set_aspect('equal', adjustable='box')
+    
+    # Add statistics box
+    mean_delta = df['Thickness_Delta'].mean()
+    std_delta = df['Thickness_Delta'].std()
+    max_pos_delta = df['Thickness_Delta'].max()
+    max_neg_delta = df['Thickness_Delta'].min()
+    stats_text = f'Mean Δ: {mean_delta:.1f}±{std_delta:.1f}Å\nMax +Δ: {max_pos_delta:.1f}Å\nMax -Δ: {max_neg_delta:.1f}Å\nn = {len(df)} points'
+    ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.9), fontsize=10)
+    
+    # 2. TOP 20 WORST COORDINATES - Ranked by absolute delta
+    ax2 = fig.add_subplot(gs[0, 2])
+    
+    # Get top 20 worst coordinates by absolute delta
+    top_worst = df.nlargest(20, 'Abs_Thickness_Delta').copy()
+    top_worst['Rank'] = range(1, len(top_worst) + 1)
+    
+    # Create color map for ranking (worst = red, better = yellow)
+    colors = plt.cm.Reds(np.linspace(0.4, 0.9, len(top_worst)))
+    
+    # Horizontal bar chart of top 20 worst deltas
+    bars = ax2.barh(range(len(top_worst)), top_worst['Abs_Thickness_Delta'], 
+                    color=colors, alpha=0.8, edgecolor='black', linewidth=0.5)
+    
+    # Add coordinate labels on bars
+    for i, (idx, row) in enumerate(top_worst.iterrows()):
+        x_pos = row['Abs_Thickness_Delta'] / 2
+        label = f"({row['BTM_X']:.0f},{row['BTM_Y']:.0f})"
+        ax2.text(x_pos, i, label, ha='center', va='center', fontsize=8, fontweight='bold')
+    
+    ax2.set_xlabel('Absolute Thickness Difference (Å)', fontsize=11)
+    ax2.set_title('TOP 20 WORST\nCoordinate Pairs\n(Ranked by |Delta|)', fontweight='bold', fontsize=11)
+    ax2.set_yticks(range(len(top_worst)))
+    ax2.set_yticklabels([f'#{i+1}' for i in range(len(top_worst))], fontsize=9)
+    ax2.grid(True, alpha=0.3, axis='x')
+    ax2.invert_yaxis()  # Worst at top
+    
+    # 3. WORST COORDINATES SPATIAL HIGHLIGHT
+    ax3 = fig.add_subplot(gs[1, 0])
+    
+    # Plot all points in light gray
+    ax3.scatter(df['BTM_X'], df['BTM_Y'], c='lightgray', s=30, alpha=0.4, edgecolors='none')
+    
+    # Highlight top 10 worst coordinates
+    top_10_worst = top_worst.head(10)
+    highlight_scatter = ax3.scatter(top_10_worst['BTM_X'], top_10_worst['BTM_Y'], 
+                                   c=top_10_worst['Abs_Thickness_Delta'], 
+                                   cmap='Reds', s=200, alpha=0.9, 
+                                   edgecolors='black', linewidth=2, marker='o')
+    
+    # Add rank labels
+    for idx, row in top_10_worst.iterrows():
+        ax3.annotate(f"#{row['Rank']}", (row['BTM_X'], row['BTM_Y']), 
+                    xytext=(5, 5), textcoords='offset points',
+                    fontsize=9, fontweight='bold', color='white',
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='red', alpha=0.7))
+    
+    ax3.set_xlabel('X Position (mm)', fontsize=11)
+    ax3.set_ylabel('Y Position (mm)', fontsize=11)
+    ax3.set_title('Spatial Location of\nWORST 10 Coordinates', fontweight='bold', fontsize=11)
+    ax3.grid(True, alpha=0.3)
+    ax3.set_aspect('equal', adjustable='box')
+    
+    # Add colorbar for worst coordinates
+    cbar3 = plt.colorbar(highlight_scatter, ax=ax3, shrink=0.7)
+    cbar3.set_label('|Delta| (Å)', rotation=270, labelpad=15, fontsize=10)
+    
+    # 4. DELTA DISTRIBUTION BY COORDINATE REGIONS
+    ax4 = fig.add_subplot(gs[1, 1])
+    
+    # Define coordinate regions based on distance from center
+    df['Region'] = pd.cut(df['Distance_from_center'], 
+                         bins=[0, 50, 100, 150], 
+                         labels=['Center\n(0-50mm)', 'Inner\n(50-100mm)', 'Edge\n(100-150mm)'],
+                         include_lowest=True)
+    
+    # Create violin plot of deltas by region
+    regions = ['Center\n(0-50mm)', 'Inner\n(50-100mm)', 'Edge\n(100-150mm)']
+    region_data = []
+    region_colors = ['lightblue', 'lightgreen', 'lightcoral']
+    
+    for region in regions:
+        region_deltas = df[df['Region'] == region]['Thickness_Delta'].dropna()
+        if len(region_deltas) > 0:
+            region_data.append(region_deltas.values)
+        else:
+            region_data.append([])
+    
+    # Create box plot with custom colors
+    bp = ax4.boxplot(region_data, labels=regions, patch_artist=True)
+    for patch, color in zip(bp['boxes'], region_colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+    
+    ax4.axhline(y=0, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Perfect Match')
+    ax4.set_ylabel('Thickness Difference (Å)', fontsize=11)
+    ax4.set_title('Delta Distribution\nby Radial Region', fontweight='bold', fontsize=11)
+    ax4.grid(True, alpha=0.3)
+    ax4.legend()
+    
+    # Add region statistics
+    region_stats = []
+    for i, (region, data) in enumerate(zip(regions, region_data)):
+        if len(data) > 0:
+            mean_val = np.mean(data)
+            std_val = np.std(data)
+            region_stats.append(f'{region.split()[0]}: μ={mean_val:.1f}±{std_val:.1f}Å (n={len(data)})')
+    
+    stats_text = '\n'.join(region_stats)
+    ax4.text(1.02, 0.5, stats_text, transform=ax4.transAxes, verticalalignment='center',
+             bbox=dict(boxstyle='round', facecolor='lightcyan', alpha=0.8), fontsize=9)
+    
+    # 5. WAFER-SPECIFIC WORST COORDINATES
+    ax5 = fig.add_subplot(gs[1, 2])
+    
+    # Analyze worst coordinates by wafer
+    wafer_worst = df.groupby('WaferID').apply(
+        lambda x: x.nlargest(3, 'Abs_Thickness_Delta')[['BTM_X', 'BTM_Y', 'Abs_Thickness_Delta']]
+    ).reset_index(level=0)
+    
+    wafer_means = df.groupby('WaferID')['Abs_Thickness_Delta'].agg(['mean', 'max', 'count']).reset_index()
+    wafer_means = wafer_means.sort_values('mean', ascending=False)
+    
+    # Bar chart of mean absolute delta by wafer
+    bars = ax5.bar(range(len(wafer_means)), wafer_means['mean'], 
+                   color='lightcoral', alpha=0.8, edgecolor='black', linewidth=1)
+    
+    # Add max values as error bars
+    ax5.errorbar(range(len(wafer_means)), wafer_means['mean'], 
+                yerr=[np.zeros(len(wafer_means)), wafer_means['max'] - wafer_means['mean']], 
+                fmt='none', color='red', capsize=5, capthick=2, alpha=0.7)
+    
+    # Add sample counts on bars
+    for i, (bar, row) in enumerate(zip(bars, wafer_means.itertuples())):
+        height = bar.get_height()
+        ax5.text(bar.get_x() + bar.get_width()/2., height + 2,
+                f'n={row.count}', ha='center', va='bottom', fontsize=9)
+    
+    ax5.set_xlabel('Wafer ID', fontsize=11)
+    ax5.set_ylabel('Mean |Delta| (Å)', fontsize=11)
+    ax5.set_title('Worst Performance\nby Wafer', fontweight='bold', fontsize=11)
+    ax5.set_xticks(range(len(wafer_means)))
+    ax5.set_xticklabels(wafer_means['WaferID'], rotation=45, ha='right', fontsize=9)
+    ax5.grid(True, alpha=0.3, axis='y')
+    
+    # Remove the table section - it will be created separately
+    
+    # Save the comprehensive analysis
+    plt.savefig('worst_coordinates_analysis.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Generate summary report
+    print(f"\n🎯 WORST COORDINATES ANALYSIS SUMMARY")
+    print("=" * 60)
+    print(f"📍 Total coordinate pairs analyzed: {len(df)}")
+    print(f"📊 Overall delta statistics:")
+    print(f"   • Mean difference: {mean_delta:.1f} ± {std_delta:.1f} Å")
+    print(f"   • Worst positive delta: {max_pos_delta:.1f} Å (DMT > BTM)")  
+    print(f"   • Worst negative delta: {max_neg_delta:.1f} Å (DMT < BTM)")
+    print(f"   • Worst absolute delta: {df['Abs_Thickness_Delta'].max():.1f} Å")
+    
+    print(f"\n🔥 TOP 5 PROBLEMATIC COORDINATES:")
+    for i, (idx, row) in enumerate(top_worst.head(5).iterrows()):
+        print(f"   {i+1}. ({row['BTM_X']:.0f}, {row['BTM_Y']:.0f}): {row['Thickness_Delta']:+.1f}Å [Wafer: {row['WaferID']}]")
+    
+    # Identify patterns in worst coordinates
+    worst_coords = top_worst.head(10)
+    edge_count = len(worst_coords[worst_coords['Distance_from_center'] > 100])
+    print(f"\n📈 PATTERN ANALYSIS (Top 10 worst):")
+    print(f"   • Edge coordinates (>100mm from center): {edge_count}/10 ({edge_count*10}%)")
+    print(f"   • Mean distance from center: {worst_coords['Distance_from_center'].mean():.1f} mm")
+    
+    return top_worst
+
+def create_coordinate_ranking_table(df):
+    """Create a separate table showing the detailed ranking of worst coordinates"""
+    # Calculate deltas
+    df['Abs_Thickness_Delta'] = abs(df['DMT_Thickness'] - df['BTM_Thickness'])
+    df['Thickness_Delta'] = df['DMT_Thickness'] - df['BTM_Thickness']
+    
+    # Get top 20 worst coordinates by absolute delta
+    top_worst = df.nlargest(20, 'Abs_Thickness_Delta').copy()
+    top_worst['Rank'] = range(1, len(top_worst) + 1)
+    
+    # Create figure for table only
+    fig, ax = plt.subplots(figsize=(16, 12))
+    ax.axis('off')  # Hide axes for table
+    
+    # Create detailed table of top 20 worst coordinates
+    table_data = []
+    for idx, row in top_worst.iterrows():
+        table_data.append([
+            f"#{row['Rank']}",
+            f"({row['BTM_X']:.0f}, {row['BTM_Y']:.0f})",
+            f"({row['DMT_X']:.0f}, {row['DMT_Y']:.0f})",
+            f"{row['BTM_Thickness']:.0f}",
+            f"{row['DMT_Thickness']:.0f}",
+            f"{row['Thickness_Delta']:+.1f}",
+            f"{row['Abs_Thickness_Delta']:.1f}",
+            f"{row['Distance_mm']:.2f}",
+            row['WaferID']
+        ])
+    
+    # Create table
+    table = ax.table(cellText=table_data,
+                    colLabels=['Rank', 'BTM (X,Y)', 'DMT (X,Y)', 'BTM [Å]', 'DMT [Å]', 
+                              'Delta [Å]', '|Delta| [Å]', 'Match Dist [mm]', 'Wafer'],
+                    cellLoc='center',
+                    loc='center',
+                    colWidths=[0.08, 0.12, 0.12, 0.1, 0.1, 0.1, 0.1, 0.13, 0.15])
+    
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(11)
+    table.scale(1, 2)
+    
+    # Color-code the worst rows
+    for i in range(len(table_data)):
+        for j in range(len(table_data[i])):
+            cell = table[(i+1, j)]  # +1 because row 0 is header
+            if i < 5:  # Top 5 worst
+                cell.set_facecolor('#ffcccc')  # Light red
+            elif i < 10:  # Next 5 worst  
+                cell.set_facecolor('#ffffcc')  # Light yellow
+            elif i < 15:  # Next 5
+                cell.set_facecolor('#ccffcc')  # Light green
+            else:  # Remaining
+                cell.set_facecolor('#ffffff')  # White
+    
+    # Color header
+    for j in range(9):
+        cell = table[(0, j)]
+        cell.set_facecolor('#4472C4')  # Blue header
+        cell.set_text_props(weight='bold', color='white')
+    
+    # Add title
+    plt.suptitle('Detailed Ranking: TOP 20 WORST Coordinate Pairs\n' + 
+                'Biggest Thickness Deltas (DMT - BTM)\n' +
+                '🔴 Red: Worst 5   🟡 Yellow: Next 5   🟢 Green: Next 5   ⚪ White: Remaining', 
+                fontsize=16, fontweight='bold', y=0.95)
+    
+    # Add summary statistics at the bottom
+    mean_delta = df['Thickness_Delta'].mean()
+    std_delta = df['Thickness_Delta'].std()
+    worst_delta = df['Abs_Thickness_Delta'].max()
+    
+    stats_text = f"""Key Statistics:
+• Total coordinate pairs: {len(df)}
+• Mean thickness difference: {mean_delta:.1f}±{std_delta:.1f} Å  
+• Worst absolute delta: {worst_delta:.1f} Å
+• Edge coordinates (>100mm): {len(top_worst[np.sqrt(top_worst['BTM_X']**2 + top_worst['BTM_Y']**2) > 100])}/20 ({len(top_worst[np.sqrt(top_worst['BTM_X']**2 + top_worst['BTM_Y']**2) > 100])*5}%)"""
+    
+    ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
+            ha='center', va='bottom', fontsize=12,
+            bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8, pad=1))
+    
+    plt.tight_layout()
+    plt.savefig('coordinate_ranking_table.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"📋 Coordinate ranking table saved to: coordinate_ranking_table.png")
+    
+    return top_worst
+
 def main():
     """Main function to generate all visualizations"""
     print("🔬 Thickness Measurement Visualization Tool")
@@ -550,9 +849,14 @@ def main():
     print("5. Creating radial analysis plots...")
     create_radial_analysis_plots(df)
     
-    print("6. Generating statistical summary...")
-    create_statistical_summary(df)
+    print("6. Creating worst coordinates analysis...")
+    create_worst_coordinate_analysis(df)
     
+    print("7. Creating coordinate ranking table...")
+    create_coordinate_ranking_table(df)
+    
+    print("8. Generating statistical summary...")
+    create_statistical_summary(df)
     print("\n✅ All visualizations completed!")
     print("📁 Files generated:")
     print("   • thickness_trend_plots.png")
@@ -560,6 +864,8 @@ def main():
     print("   • thickness_qq_plots.png")
     print("   • thickness_spatial_delta_plot.png")
     print("   • thickness_radial_analysis.png")
+    print("   • worst_coordinates_analysis.png  ⭐ FIXED: Layout corrected")
+    print("   • coordinate_ranking_table.png  ⭐ NEW: Separate table image")
     print("   • statistical_summary.txt")
 
 if __name__ == "__main__":
