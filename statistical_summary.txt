@@ -1,0 +1,35 @@
+THICKNESS MEASUREMENT COMPARISON SUMMARY
+==================================================
+
+DESCRIPTIVE STATISTICS:
+              BTM       DMT  Difference (DMT-BTM)
+Count      116.00    116.00                116.00
+Mean     12385.59  12394.81                  9.23
+Std Dev     96.48     62.90                 56.02
+Min      12230.00  12272.11               -124.87
+Q1       12309.00  12348.48                 30.84
+Median   12365.00  12393.86                 35.88
+Q3       12445.50  12441.84                 38.84
+Max      12621.00  12521.69                 46.38
+
+STATISTICAL TESTS:
+                Test Statistic  P-Value            Interpretation
+  Shapiro-Wilk (BTM)         - 0.000936                Non-normal
+  Shapiro-Wilk (DMT)         - 0.070149                    Normal
+ Shapiro-Wilk (Diff)         - 0.000000                Non-normal
+       Paired t-test     1.773 0.078799 No significant difference
+Wilcoxon Signed-rank         - 0.000662    Significant difference
+      Mann-Whitney U         - 0.111491 No significant difference
+  Kolmogorov-Smirnov         - 0.063457         Same distribution
+  F-test (Equal Var)     2.353 0.000006         Unequal variances
+ Pearson Correlation     0.834 2.93e-31        Strong correlation
+Spearman Correlation     0.894 1.45e-41        Strong correlation
+
+CONCLUSIONS:
+• Measurement Tools: DMT vs BTM thickness comparison
+• Sample Size: 116 matched measurement pairs from 4 wafers
+• Mean Difference: 9.23 ± 56.02 Å (DMT - BTM)
+• Correlation: r = 0.834 (p < 0.001)
+• Statistical Conclusion: 1/4 tests show significant differences
+• Recommendation: Further investigation of systematic differences needed
+• Practical Conclusion: Mean difference is practically negligible
